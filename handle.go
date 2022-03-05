@@ -2,6 +2,8 @@ package socks5
 
 import (
 	"context"
+	"log"
+	"os"
 	"fmt"
 	"io"
 	"net"
@@ -10,6 +12,12 @@ import (
 
 	"github.com/things-go/go-socks5/statute"
 )
+
+var localSubNets []string
+
+func init() {
+	localSubNets = strings.Split(os.Getenv("LOCAL_SUBNETS"), ",")
+}
 
 // AddressRewriter is used to rewrite a destination transparently
 type AddressRewriter interface {
@@ -60,6 +68,13 @@ func (sf *Server) handleRequest(write io.Writer, req *Request) error {
 				return fmt.Errorf("failed to send reply, %v", err)
 			}
 			return fmt.Errorf("failed to resolve destination[%v], %v", dest.FQDN, err)
+		}
+	}
+	log.Printf("Destination IP: [%s] Port: [%d]\n", dest.IP, dest.Port)
+	for _, ipnet := range localSubNets {
+		_,ipnetA,_ := net.ParseCIDR(ipnet)
+		if ipnetA.Contains(dest.IP) { // destination ip is in local network, block access
+			return fmt.Errorf("Destination %v is blocked by rules", dest.IP)
 		}
 	}
 
