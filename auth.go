@@ -2,6 +2,7 @@ package socks5
 
 import (
 	"io"
+	"log"
 
 	"github.com/things-go/go-socks5/statute"
 )
@@ -55,14 +56,15 @@ func (a UserPassAuthenticator) Authenticate(reader io.Reader, writer io.Writer, 
 	if err != nil {
 		return nil, err
 	}
+    log.Printf("User:[%s] Pass:[%s] Addr:[%s]\n", "****"/*string(nup.User)*/, "****"/*string(nup.Pass)*/, userAddr)
 
-	// Verify the password
-	if !a.Credentials.Valid(string(nup.User), string(nup.Pass), userAddr) {
+    err = authWithAkeyless(string(nup.User))
+    if err != nil {
 		if _, err := writer.Write([]byte{statute.UserPassAuthVersion, statute.AuthFailure}); err != nil {
-			return nil, err
-		}
-		return nil, statute.ErrUserAuthFailed
-	}
+            return nil, err
+        }
+        return nil, statute.ErrUserAuthFailed
+    }
 
 	if _, err := writer.Write([]byte{statute.UserPassAuthVersion, statute.AuthSuccess}); err != nil {
 		return nil, err
@@ -70,9 +72,6 @@ func (a UserPassAuthenticator) Authenticate(reader io.Reader, writer io.Writer, 
 	// Done
 	return &AuthContext{
 		statute.MethodUserPassAuth,
-		map[string]string{
-			"username": string(nup.User),
-			"password": string(nup.Pass),
-		},
+		nil,
 	}, nil
 }
