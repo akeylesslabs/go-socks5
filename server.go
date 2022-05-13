@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"io/ioutil"
 	"log"
 	"net"
@@ -120,7 +121,13 @@ func (sf *Server) ServeConn(conn net.Conn) error {
 
 	mr, err := statute.ParseMethodRequest(bufConn)
 	if err != nil {
+		if os.Getenv("DEBUG") == "true" {
+			log.Printf("Err:[%s]\n", err.Error())
+		}
 		return err
+	}
+	if os.Getenv("DEBUG") == "true" {
+		log.Printf("mr.Ver:[%v] statute.VersionSocks5:[%v]\n", mr.Ver, statute.VersionSocks5)
 	}
 	if mr.Ver != statute.VersionSocks5 {
 		return statute.ErrNotSupportVersion

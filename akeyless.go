@@ -32,21 +32,36 @@ type CurlOutput struct {
 }
 
 func ValidateToken(token string) (bool, error) {
-
+	debug := os.Getenv("DEBUG")
 	str := fmt.Sprintf("{\"cmd\":\"validate-token\", \"token\":\"%v\", \"debug\":\"true\"}", token)
+	if debug == "true" {
+		log.Printf("GW URL:[%s], CMD:[%s]\n", os.Getenv("AKEYLESS_GW_URL"), str)
+	}
 	resp, err := sendReq(os.Getenv("AKEYLESS_GW_URL"), str)
 	if resp == "" {
+		if debug == "true" {
+			log.Printf("Err:[%s]\n", "empty response")
+		}
 		return false, err
 	}
 	curlRes := CurlOutput{}
 	err = json.Unmarshal([]byte(resp), &curlRes)
 	if err != nil {
+		if debug == "true" {
+			log.Printf("Err: json unmarshal [%s]\n", err.Error())
+		}
 		return false, err
 	}
 	if curlRes.Status != "success" {
+		if debug == "true" {
+			log.Printf("Err: status [%s]\n", curlRes.Status)
+		}
 		return false, nil
 	}
 	if strings.Contains(resp, `"is_valid": false,`) {
+		if debug == "true" {
+			log.Printf("Err: invalid [%s]\n", resp)
+		}
 		return false, nil
 	}
 	lines, _ := curlRes.Response.([]interface{})
@@ -55,9 +70,15 @@ func ValidateToken(token string) (bool, error) {
 		if strings.HasPrefix(l, "UAM: ") {
 			claims, err := ParseUnvalidatedClaimsFromJWT(strings.TrimPrefix(l, "UAM: "))
 			if err != nil {
+				if debug == "true" {
+					log.Printf("Err: ParseUnvalidatedClaimsFromJWT [%s]\n", err.Error())
+				}
 				return false, err
 			}
 			if claims.AccessId == "" {
+				if debug == "true" {
+					log.Printf("Err: empty [%s]\n", "claims.AccessId")
+				}
 				return false, err
 			}
 			for _, id := range allowedAccessIds {
@@ -65,6 +86,10 @@ func ValidateToken(token string) (bool, error) {
 					log.Printf("Valid AccessId:[%s]\n", claims.AccessId)
 					return true, nil
 				}
+			}
+		} else {
+			if debug == "true" {
+				log.Printf("Err: no uam [%s]\n", l)
 			}
 		}
 	}
@@ -130,3 +155,4 @@ func ParseUnvalidatedClaimsFromJWT(creds string) (*Claims, error) {
 	}
 	return &claims, nil
 }
+

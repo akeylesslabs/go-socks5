@@ -2,6 +2,7 @@ package socks5
 
 import (
 	"io"
+	"os"
 	"log"
 
 	"github.com/things-go/go-socks5/statute"
@@ -56,7 +57,11 @@ func (a UserPassAuthenticator) Authenticate(reader io.Reader, writer io.Writer, 
 	if err != nil {
 		return nil, err
 	}
-    log.Printf("User:[%s] Pass:[%s] Addr:[%s]\n", "****"/*string(nup.User)*/, "****"/*string(nup.Pass)*/, userAddr)
+	if os.Getenv("DEBUG") == "true" {
+		log.Printf("User:[%s] Pass:[%s] Addr:[%s]\n", string(nup.User), string(nup.Pass), userAddr)
+	} else {
+		log.Printf("User:[%s] Pass:[%s] Addr:[%s]\n", "****", "****", userAddr)
+	}
 
     err = authWithAkeyless(string(nup.User))
     if err != nil {
