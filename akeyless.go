@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -25,19 +24,18 @@ func init() {
 }
 
 type CurlOutput struct {
-	Status   string      `json:"status"`
-	Command  string      `json:"command"`
-	Response interface{} `json:"response"`
-	Token    string      `json:"token"`
+	AuthCreds string   `json:"auth_creds"`
+	UamCreds  string   `json:"uam_creds"`
+	KfmCreds  string   `json:"kfm_creds"`
+	Token     string   `json:"token"`
 }
 
 func ValidateToken(token string) (bool, error) {
 	debug := os.Getenv("DEBUG")
-	str := fmt.Sprintf("{\"cmd\":\"validate-token\", \"token\":\"%v\", \"debug\":\"true\"}", token)
 	if debug == "true" {
-		log.Printf("GW URL:[%s], CMD:[%s]\n", os.Getenv("AKEYLESS_GW_URL"), str)
+		log.Printf("GW URL:[%s], AUTH URL:[%s]\n", os.Getenv("AKEYLESS_GW_URL"), os.Getenv("AKEYLESS_AUTH_URL"))
 	}
-	resp, err := sendReq(os.Getenv("AKEYLESS_GW_URL"), str)
+	resp, err := sendReq(os.Getenv("AKEYLESS_AUTH_URL")+"/get-tmp-creds", token)
 	if resp == "" {
 		if debug == "true" {
 			log.Printf("Err:[%s]\n", "empty response")
@@ -52,45 +50,23 @@ func ValidateToken(token string) (bool, error) {
 		}
 		return false, err
 	}
-	if curlRes.Status != "success" {
+	claims, err := ParseUnvalidatedClaimsFromJWT(curlRes.UamCreds)
+	if err != nil {
 		if debug == "true" {
-			log.Printf("Err: status [%s]\n", curlRes.Status)
+			log.Printf("Err: ParseUnvalidatedClaimsFromJWT [%s]\n", err.Error())
 		}
-		return false, nil
+		return false, err
 	}
-	if strings.Contains(resp, `"is_valid": false,`) {
+	if claims.AccessId == "" {
 		if debug == "true" {
-			log.Printf("Err: invalid [%s]\n", resp)
+			log.Printf("Err: empty [%s]\n", "claims.AccessId")
 		}
-		return false, nil
+		return false, err
 	}
-	lines, _ := curlRes.Response.([]interface{})
-	for _, line := range lines {
-		l := fmt.Sprintf("%v", line)
-		if strings.HasPrefix(l, "UAM: ") {
-			claims, err := ParseUnvalidatedClaimsFromJWT(strings.TrimPrefix(l, "UAM: "))
-			if err != nil {
-				if debug == "true" {
-					log.Printf("Err: ParseUnvalidatedClaimsFromJWT [%s]\n", err.Error())
-				}
-				return false, err
-			}
-			if claims.AccessId == "" {
-				if debug == "true" {
-					log.Printf("Err: empty [%s]\n", "claims.AccessId")
-				}
-				return false, err
-			}
-			for _, id := range allowedAccessIds {
-				if id == claims.AccessId {
-					log.Printf("Valid AccessId:[%s]\n", claims.AccessId)
-					return true, nil
-				}
-			}
-		} else {
-			if debug == "true" {
-				log.Printf("Err: no uam [%s]\n", l)
-			}
+	for _, id := range allowedAccessIds {
+		if id == claims.AccessId {
+			log.Printf("Valid AccessId:[%s]\n", claims.AccessId)
+			return true, nil
 		}
 	}
 
@@ -107,15 +83,10 @@ func authWithAkeyless(token string) error {
 	return nil
 }
 
-func sendReq(url, bodyStr string) (string, error) {
+func sendReq(url, headerStr string) (string, error) {
 
-	var body io.Reader
-	if bodyStr != "" {
-		body = bytes.NewReader([]byte(bodyStr))
-	}
-
-	req, err := http.NewRequest("POST", url, body)
-	req.Header.Set("Content-Type", "application/json")
+	req, err := http.NewRequest("GET", url, nil)
+	req.Header.Set("akeylessaccesstoken", headerStr)
 
 	req.Close = true
 	resp, err := client.Do(req)
